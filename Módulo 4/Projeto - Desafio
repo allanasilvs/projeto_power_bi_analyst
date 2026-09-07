@@ -1,1 +1,169 @@
+-- Seleciona o banco de dados "azure_company" para que os comandos seguintes sejam executados nele
+use azure_company;
 
+-- Criação da tabela de funcionários (employee) com seus atributos e restrições básicas
+CREATE TABLE employee(
+	Fname varchar(15) not null,                 -- Primeiro nome do funcionário (obrigatório)
+    Minit char,                                   -- Inicial do nome do meio
+    Lname varchar(15) not null,                 -- Sobrenome do funcionário (obrigatório)
+    Ssn char(9) not null,                         -- Número de Segurança Social (CPF/RG americano), usado como identificador
+    Bdate date,                                   -- Data de nascimento
+    Address varchar(30),                          -- Endereço
+    Sex char,                                     -- Sexo/Gênero
+    Salary decimal(10,2),                         -- Salário (com 2 casas decimais)
+    Super_ssn char(9),                            -- SSN do supervisor (auto-relacionamento)
+    Dno int not null,                             -- Número do departamento ao qual o funcionário pertence
+    constraint chk_salary_employee check (Salary> 2000.0), -- Restrição: o salário deve ser superior a 2000.0
+    constraint pk_employee primary key (Ssn)      -- Define o Ssn como Chave Primária da tabela
+);
+
+-- Altera a tabela employee para adicionar uma chave estrangeira de auto-relacionamento (um funcionário supervisiona outro)
+alter table employee 
+	add constraint fk_employee 
+	foreign key(Super_ssn) references employee(Ssn)
+    on delete set null                            -- Se o supervisor for deletado, o campo fica NULL
+    on update cascade;                            -- Se o Ssn do supervisor mudar, atualiza automaticamente aqui
+
+-- Modifica a coluna Dno para garantir que seja obrigatória (not null) e defina o valor padrão como 1 caso não informado
+alter table employee modify Dno int not null default 1;
+
+
+-- Criação da tabela de departamentos (departament)
+create table departament(
+	Dname varchar(15) not null,                 -- Nome do departamento (obrigatório)
+    Dnumber int not null,                         -- Número/Código do departamento (obrigatório)
+    Mgr_ssn char(9) not null,                     -- SSN do gerente do departamento
+    Mgr_start_date date,                          -- Data de início do gerente no cargo
+    Dept_create_date date,                        -- Data de criação do departamento
+    constraint chk_date_dept check (Dept_create_date < Mgr_start_date), -- Restrição: criação deve ser anterior ao início do gerente
+    constraint pk_dept primary key (Dnumber),     -- Define Dnumber como Chave Primária
+    constraint unique_name_dept unique(Dname),    -- Garante que o nome do departamento seja único
+    foreign key (Mgr_ssn) references employee(Ssn) -- Chave estrangeira ligando o gerente ao funcionário
+);
+
+-- Remove a chave estrangeira padrão gerada automaticamente para o gerente
+alter table departament drop  departament_ibfk_1;
+
+-- Recria a chave estrangeira do gerente especificando o comportamento de atualização em cascata
+alter table departament 
+		add constraint fk_dept foreign key(Mgr_ssn) references employee(Ssn)
+        on update cascade;
+        
+
+-- Criação da tabela de localizações dos departamentos (permite múltiplos locais por departamento)
+create table dept_locations(
+	Dnumber int not null,                       -- Número do departamento
+	Dlocation varchar(15) not null,             -- Localização/cidade do departamento
+    constraint pk_dept_locations primary key (Dnumber, Dlocation), -- Chave primária composta pelas duas colunas
+    constraint fk_dept_locations foreign key (Dnumber) references departament (Dnumber) -- Chave estrangeira ligando ao departamento
+);
+
+-- Remove a chave estrangeira anterior de localização
+alter table dept_locations drop fk_dept_locations;
+
+-- Recria a chave estrangeira de localizações aplicando exclusão e atualização em cascata
+alter table dept_locations 
+	add constraint fk_dept_locations foreign key (Dnumber) references departament(Dnumber)
+	on delete cascade
+    on update cascade;
+
+-- Criação da tabela de projetos
+create table project(
+	Pname varchar(15) not null,                 -- Nome do projeto
+	Pnumber int not null,                       -- Número/ID do projeto
+    Plocation varchar(15),                        -- Localização do projeto
+    Dnum int not null,                          -- Número do departamento que controla o projeto
+    primary key (Pnumber),                        -- Define Pnumber como Chave Primária
+    constraint unique_project unique (Pname),     -- Garante que o nome do projeto seja único
+    constraint fk_project foreign key (Dnum) references departament(Dnumber) -- Chave estrangeira ligando ao departamento controlador
+);
+
+
+-- Criação da tabela associativa que registra quais funcionários trabalham em quais projetos (relação N para N)
+create table works_on(
+	Essn char(9) not null,                      -- SSN do funcionário
+    Pno int not null,                           -- Número do projeto
+    Hours decimal(3,1) not null,                -- Horas trabalhadas por semana no projeto
+    primary key (Essn, Pno),                      -- Chave primária composta para evitar duplicidade de funcionário no mesmo projeto
+    constraint fk_employee_works_on foreign key (Essn) references employee(Ssn), -- Chave estrangeira ligando ao funcionário
+    constraint fk_project_works_on foreign key (Pno) references project(Pnumber)   -- Chave estrangeira ligando ao projeto
+);
+
+-- Remove a tabela de dependentes caso já exista (evita erro de tabela duplicada)
+drop table dependent;
+
+-- Criação da tabela de dependentes dos funcionários
+create table dependent(
+	Essn char(9) not null,                      -- SSN do funcionário responsável (chave estrangeira)
+    Dependent_name varchar(15) not null,          -- Nome do dependente
+    Sex char,                                     -- Sexo do dependente
+    Bdate date,                                   -- Data de nascimento do dependente
+    Relationship varchar(8),                      -- Parentesco (ex: Filho, Cônjuge)
+    primary key (Essn, Dependent_name),           -- Chave primária composta (um funcionário não pode ter dois dependentes com o mesmo nome)
+    constraint fk_dependent foreign key (Essn) references employee(Ssn) -- Chave estrangeira ligando ao funcionário
+);
+
+
+-- Insere registros iniciais de departamentos na tabela departament
+INSERT INTO departament (Dname, Dnumber, Mgr_ssn, Mgr_start_date, Dept_create_date) VALUES 
+    ('Research', 5, '333445555', '1988-05-22', '1986-05-22'),
+    ('Administration', 4, '987654321', '1995-01-01', '1994-01-01'),
+    ('Headquarters', 1, '888665555', '1981-06-19', '1980-06-19');
+
+
+-- Insere registros iniciais de funcionários na tabela employee
+INSERT INTO employee (Fname, Minit, Lname, Ssn, Bdate, Address, Sex, Salary, Super_ssn, Dno) VALUES 
+    ('John', 'B', 'Smith', '123456789', '1965-01-09', '731 Fondren, Houston, TX', 'M', 30000.00, '333445555', 5),
+    ('Franklin', 'T', 'Wong', '333445555', '1955-12-08', '638 Voss, Houston, TX', 'M', 40000.00, '888665555', 5),
+    ('Alicia', 'J', 'Zelaya', '998877665', '1968-01-19', '3321 Castle, Spring, TX', 'F', 25000.00, '987654321', 4),
+    ('Jennifer', 'S', 'Wallace', '987654321', '1941-06-20', '291 Berry, Bellaire, TX', 'F', 43000.00, '888665555', 4),
+    ('Ramesh', 'K', 'Narayan', '666884444', '1962-09-15', '975 Fire Oak, Humble, TX', 'M', 38000.00, '333445555', 5),
+    ('Joyce', 'A', 'English', '453453453', '1972-07-31', '5631 Rice, Houston, TX', 'F', 25000.00, '333445555', 5),
+    ('Ahmad', 'V', 'Jabbar', '987987987', '1969-03-29', '980 Dallas, Houston, TX', 'M', 25000.00, '987654321', 4),
+    ('James', 'E', 'Borg', '888665555', '1937-11-10', '450 Stone, Houston, TX', 'M', 55000.00, NULL, 1);
+    
+-- Insere registros de dependentes vinculados aos funcionários correspondentes
+insert into dependent (Essn, Dependent_name, Sex, Bdate, Relationship) values 
+	(333445555, 'Alice', 'F', '1986-04-05', 'Daughter'),
+	(333445555, 'Theodore', 'M', '1983-10-25', 'Son'),
+	(333445555, 'Joy', 'F', '1958-05-03', 'Spouse'),
+	(987654321, 'Abner', 'M', '1942-02-28', 'Spouse'),
+    (123456789, 'Michael', 'M', '1988-01-04', 'Son'),
+    (123456789, 'Alice', 'F', '1988-12-30', 'Daughter'),
+    (123456789, 'Elizabeth', 'F', '1967-05-05', 'Spouse');
+    
+-- Insere as localizações geográficas de cada departamento
+insert into dept_locations (Dnumber, Dlocation) values 
+	(1, 'Houston'),
+	(4, 'Stafford'),
+    (5, 'Bellaire'),
+    (5, 'Sugarland'),
+    (5, 'Houston');
+    
+-- Insere os dados dos projetos gerenciados pelos departamentos
+insert into project (Pname, Pnumber, Plocation, Dnum) values
+	('ProductX', 1, 'Bellaire', 5),
+	('ProductY', 2, 'Sugarland', 5),
+	('ProductZ', 3, 'Houston', 5),
+    ('Computerization', 10, 'Stafford', 4),
+	('Reorganization', 20, 'Houston', 1),
+	('Newbenefits', 30, 'Stafford', 4);
+    
+-- Insere a relação de funcionários que trabalham em projetos específicos e suas respectivas horas semanais
+insert into works_on (Essn, Pno, Hours) values 
+	(123456789, 1, 32.5),
+	(123456789, 2, 7.5),
+    (666884444, 3, 40.0),
+    (453453453, 1, 20.0),
+    (453453453, 2, 20.0),
+    (333445555, 2, 10.0),
+	(333445555, 3, 10.0),
+	(333445555, 10, 10.0),
+    (333445555, 20, 10.0),
+    (999887777, 30, 30.0),
+    (999887777, 10, 10.0),
+    (987987987, 10, 35.0),
+	(987987987, 30, 5.0),
+    (987654321, 30, 20.0),
+    (987654321, 20, 15.0),
+    (888665555, 20, 0.0);
