@@ -1,0 +1,8 @@
+#Desafio de Projeto
+
+No item 14 do desafio do Módulo 4 foi solicitado o seguinte:
+  "Explique por que, no caso supracitado no item 13, podemos apenas utilizar o mesclar e não o atribuir."
+
+Obs.: O item 13 solicitava a mesclagem dos nomes de departamentos e localização,fazendo com que cada combinação departamento-local seja único.
+
+A resposta é: O objetivo da opção "Atribuir" é diferente, fazendo com que seja colocado os dados de departamentos abaixo dos dados de localização, empilhando-os. E a mesclagem faria com que os dados se correspondessem, lado a lado.
